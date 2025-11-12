@@ -65,6 +65,40 @@ export default function Home() {
   const [showFeedback, setShowFeedback] = useState(false);
   const [sessionSummary, setSessionSummary] = useState<SessionSummary | null>(null);
 
+  // Loading state
+  const [isLoadingSession, setIsLoadingSession] = useState(false);
+  const [currentTip, setCurrentTip] = useState(0);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+
+  // Conversation tips to display during loading
+  const conversationTips = [
+    "Maintain eye contact to show you're engaged",
+    "Ask open-ended questions to encourage dialogue",
+    "Listen actively before responding",
+    "Mirror body language to build rapport",
+    "Pause before responding to show thoughtfulness",
+    "Use the other person's name to personalize",
+    "Avoid interrupting - let them finish",
+    "Show genuine curiosity about their perspective",
+    "Acknowledge emotions before problem-solving",
+    "Keep your tone warm and welcoming",
+    "Match the other person's energy level — too high or low can break rapport.",
+    "Share small vulnerabilities; it builds trust faster than perfection.",
+    "Silence is powerful — people often reveal more if you simply wait.",
+    "Notice metaphors they use; it reveals how they see the world.",
+    "Summarize what you heard in your own words — it shows deep listening.",
+    "Ask 'how did that feel?' instead of 'what happened?' to go deeper.",
+    "Use humor lightly to diffuse tension and signal psychological safety.",
+    "Compliment something specific and genuine — vague praise feels empty.",
+    "If you disagree, start by finding one point of agreement first.",
+    "Watch for micro-signals (tone shifts, pauses) — they often matter more than words.",
+    "End on curiosity — a thoughtful question leaves a lasting impression.",
+    "Match pacing — speak slightly slower in tense moments to calm the tone.",
+    "Reflect back emotions as guesses: 'Sounds like that was frustrating?'",
+    "Invite stories, not facts: 'Tell me about a time when…'",
+    "Use 'we' language to create collaboration instead of competition.",
+  ];
+
   const { RiveComponent, rive } = useRive({
     src: "/attached_assets/coco.riv?v=3",
     stateMachines: "State Machine 1",
@@ -143,6 +177,40 @@ export default function Home() {
     }
   }, []);
 
+  // Cycle through tips while loading
+  useEffect(() => {
+    if (isLoadingSession) {
+      const interval = setInterval(() => {
+        setCurrentTip(Math.floor(Math.random() * conversationTips.length))
+      }, 4000); // Change tip every 4 seconds
+
+      return () => clearInterval(interval);
+    }
+  }, [isLoadingSession, conversationTips.length]);
+
+  // Track loading progress from 0 to 30 seconds
+  useEffect(() => {
+    if (isLoadingSession) {
+      setLoadingProgress(0);
+      const startTime = Date.now();
+      const duration = 30000; // 30 seconds
+
+      const interval = setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min((elapsed / duration) * 100, 100);
+        setLoadingProgress(progress);
+
+        if (progress >= 100) {
+          clearInterval(interval);
+        }
+      }, 100); // Update every 100ms for smooth animation
+
+      return () => clearInterval(interval);
+    } else {
+      setLoadingProgress(0);
+    }
+  }, [isLoadingSession]);
+
   // Wake up Render instance on page load
   useEffect(() => {
     const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
@@ -197,6 +265,8 @@ export default function Home() {
   const handleStartRecording = async () => {
     // First, create a session with the backend
     try {
+      setIsLoadingSession(true);
+      setCurrentTip(Math.floor(Math.random() * conversationTips.length))
       const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
 
       const response = await fetch(`${backendUrl}/session`, {
@@ -233,6 +303,7 @@ export default function Home() {
       setAppState("recording");
       setIsRecording(true);
       setIsPaused(false);
+      setIsLoadingSession(false);
 
       // Connect to WebSocket
       const wsUrl = backendUrl.replace('http', 'ws');
@@ -322,7 +393,8 @@ export default function Home() {
       };
     } catch (error: any) {
       console.error('Microphone permission error:', error);
-      
+      setIsLoadingSession(false);
+
       // Show detailed instructions based on the error
       if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
         toast({
@@ -791,6 +863,72 @@ export default function Home() {
           </Card>
         </div>
       </div>
+
+      {/* Loading Dialog */}
+      <Dialog open={isLoadingSession} onOpenChange={setIsLoadingSession}>
+        <DialogContent
+          className="max-w-lg bg-black/95 border-2 border-[#FFE8C9] text-white"
+          onPointerDownOutside={(e) => e.preventDefault()}
+        >
+          <div className="flex flex-col items-center justify-center py-10 space-y-8">
+            {/* Circular Progress Indicator */}
+            <div className="relative flex items-center justify-center">
+              <svg className="w-40 h-40 transform -rotate-90">
+                {/* Background circle */}
+                <circle
+                  cx="80"
+                  cy="80"
+                  r="70"
+                  stroke="#FFE8C9"
+                  strokeWidth="8"
+                  fill="none"
+                  opacity="0.2"
+                />
+                {/* Progress circle */}
+                <circle
+                  cx="80"
+                  cy="80"
+                  r="70"
+                  stroke="#FFE8C9"
+                  strokeWidth="8"
+                  fill="none"
+                  strokeDasharray={`${2 * Math.PI * 70}`}
+                  strokeDashoffset={`${2 * Math.PI * 70 * (1 - loadingProgress / 100)}`}
+                  strokeLinecap="round"
+                  className="transition-all duration-100 ease-linear"
+                />
+              </svg>
+              {/* Center text */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-4xl font-bold text-[#FFE8C9]">
+                  {Math.round(loadingProgress)}%
+                </span>
+                <span className="text-xs text-gray-400 mt-1">
+                  {Math.round((loadingProgress / 100) * 30)}s / 30s
+                </span>
+              </div>
+            </div>
+
+            {/* Title */}
+            <div className="text-center space-y-2">
+              <h3 className="text-2xl font-bold text-[#FFE8C9]">Waking up COCO...</h3>
+              <p className="text-sm text-gray-400">Please wait while we prepare your session</p>
+            </div>
+
+            {/* Conversation Tips - More Prominent */}
+            <div className="w-full bg-[#FFE8C9]/10 border-2 border-[#FFE8C9] rounded-2xl p-6 min-h-[120px] flex items-center justify-center backdrop-blur-sm">
+              <div className="text-center space-y-2">
+                <p className="text-xs font-bold text-[#FFE8C9] uppercase tracking-wider">
+                  💡 Conversation Tip
+                </p>
+                <p className="text-lg font-medium text-white leading-relaxed">
+                  {conversationTips[currentTip]}
+                </p>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Feedback Dialog */}
       <Dialog open={showFeedback} onOpenChange={setShowFeedback}>
